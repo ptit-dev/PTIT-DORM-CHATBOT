@@ -1,0 +1,27 @@
+# Ignore all files
+*
+
+# Except these files
+!rag_logic.py
+!data_ingestion.py
+!api_service.py
+!requirements.txt
+!README.md
+!.gitignore
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore environment variables
+.env
+
+# Ignore data folders
+data_documents/
+data_documents_test/
+rag_chroma_db/
+
+# Ignore notebook checkpoints
+.ipynb_checkpoints/
