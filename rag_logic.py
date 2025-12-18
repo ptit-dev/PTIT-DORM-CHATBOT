@@ -1,15 +1,13 @@
 import os
 import sys
-import shutil
-import traceback 
+import traceback
 from dotenv import load_dotenv
-
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_google_genai import GoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from typing import Optional, Tuple
-from langchain_core.language_models.llms import LLM 
+from langchain_core.language_models.llms import LLM
 from google.genai.errors import APIError as GoogleAPIError
 
 # Chữa lỗi Unicode trên Windows
@@ -21,18 +19,19 @@ if sys.stdout.encoding.lower() != 'utf-8':
 
 # CẤU HÌNH API
 load_dotenv()
-os.environ['GOOGLE_API_KEY'] = os.getenv('GOOGLE_API_KEY') 
+os.environ['GOOGLE_API_KEY'] = os.getenv('GOOGLE_API_KEY')
 VECTOR_DB_PATH = "rag_chroma_db"
 
-# LLM_MODEL_ID = "gemini-2.5-flash" 
+# LLM_MODEL_ID = "gemini-2.5-flash"
 LLM_MODEL_ID = "gemma-3-27b-it"
 
-# EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-large" 
+# EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-large"
 # EMBEDDING_MODEL_NAME = "vinai/phobert-base"
 EMBEDDING_MODEL_NAME = "bkai-foundation-models/vietnamese-bi-encoder"
 
 API_TIMEOUT_SECONDS = 60
 RETRIEVAL_K_CHUNKS = 5
+
 
 def load_llm_and_db() -> Tuple[Optional[LLM], Optional[Chroma]]:
     """
@@ -45,8 +44,8 @@ def load_llm_and_db() -> Tuple[Optional[LLM], Optional[Chroma]]:
             print("🔴 LỖI: GOOGLE_API_KEY chưa được thiết lập trong file .env")
             return None, None
         llm = GoogleGenerativeAI(
-            model=LLM_MODEL_ID,  
-            temperature=0.23, 
+            model=LLM_MODEL_ID,
+            temperature=0.23,
             max_output_tokens=10000,
         )
         print(f"✅ Khởi tạo LLM {LLM_MODEL_ID} (Gemini API) thành công. Timeout: {API_TIMEOUT_SECONDS}s")
@@ -71,14 +70,15 @@ def load_llm_and_db() -> Tuple[Optional[LLM], Optional[Chroma]]:
 
     return llm, vectorstore
 
+
 def generate_response(llm: LLM, vectorstore: Chroma, question: str):
     """
     Thực hiện luồng RAG: Retrieval (Truy vấn) -> Augmentation (Tăng cường) -> Generation (Tạo câu trả lời).
-    """    
+    """
     # Retrieval: LẤY RETRIEVAL_K_CHUNKS (5 chunks)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": RETRIEVAL_K_CHUNKS}) 
+    retriever = vectorstore.as_retriever(search_kwargs={"k": RETRIEVAL_K_CHUNKS})
     retrieved_docs = retriever.invoke(question)
-    
+
     # Augmentation: Hợp nhất ngữ cảnh (loại bỏ xuống dòng thừa)
     context_text = "\n\n".join([" ".join(doc.page_content.split()) for doc in retrieved_docs])
 
@@ -98,7 +98,7 @@ def generate_response(llm: LLM, vectorstore: Chroma, question: str):
         "{question}\n\n"
         "Hãy đưa ra câu trả lời trực tiếp:"
     )
-    
+
     rag_prompt = PromptTemplate(
         template=template,
         input_variables=["context", "question", "current_date"]
@@ -106,21 +106,28 @@ def generate_response(llm: LLM, vectorstore: Chroma, question: str):
 
     from datetime import datetime
     current_date = datetime.now().strftime("%d/%m/%Y")
-    final_prompt = rag_prompt.format(context=context_text, question=question, current_date=current_date)
+    final_prompt = rag_prompt.format(
+        context=context_text,
+        question=question,
+        current_date=current_date
+    )
 
     print(f"-> BẮT ĐẦU gọi API đến LLM ({LLM_MODEL_ID}) qua Cloud API...")
-    
+
     try:
         response = llm.invoke(final_prompt)
         print("-> KẾT THÚC gọi API thành công.")
-        
+
         # KIỂM TRA ĐẦU RA RỖNG (EMPTY STRING CHECK)
         if not response or response.strip() == "":
-            return "Xin lỗi, mô hình LLM đã không thể tạo ra câu trả lời hợp lệ dựa trên ngữ cảnh được cung cấp. Vui lòng thử lại hoặc thay đổi câu hỏi."
-            
+            return (
+                "Xin lỗi, mô hình LLM đã không thể tạo ra câu trả lời"
+                " hợp lệ dựa trên ngữ cảnh được cung cấp."
+                "Vui lòng thử lại hoặc thay đổi câu hỏi."
+            )
+
         return response
     except Exception as e:
         # Xử lý lỗi API (nếu có)
         traceback.print_exc()
         raise Exception(f"Lỗi khi gọi API Gemini: {str(e)}")
-

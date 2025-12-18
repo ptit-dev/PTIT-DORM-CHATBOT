@@ -1,12 +1,8 @@
-from random import random
-import string
 import sys
 import os
-import shutil
 from dotenv import load_dotenv
-import glob 
+import glob
 import requests
-import json
 from datetime import datetime
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -24,7 +20,7 @@ VECTOR_DB_PATH = "rag_chroma_db"
 DATA_FOLDER = "data_documents"
 
 # MÔ HÌNH NHÚNG VĂN BẢN
-# EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-large" 
+# EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-large"
 # EMBEDDING_MODEL_NAME = "vinai/phobert-base"
 EMBEDDING_MODEL_NAME = "bkai-foundation-models/vietnamese-bi-encoder"
 
@@ -35,7 +31,7 @@ REPORT_FILE = "data_documents/ThongKeKTX.txt"
 
 
 # --- CẤU HÌNH API (DÙNG CHO BÁO CÁO TỰ ĐỘNG) ---
-load_dotenv() 
+load_dotenv()
 API_BASE_URL = os.getenv("API_BASE_URL")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME_ENV")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD_ENV")
@@ -53,21 +49,22 @@ def get_access_token():
             json={"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD}
         )
         response.raise_for_status()
-        
+
         data = response.json()
         access_token = data.get('access_token')
-        
+
         if access_token:
             print("✅ Đăng nhập thành công! Đã lấy Access Token.")
             return access_token
         else:
             print("🔴 LỖI: Đăng nhập thành công nhưng không tìm thấy access_token trong phản hồi.")
             return None
-            
+
     except requests.exceptions.RequestException as e:
         status_code = e.response.status_code if e.response is not None else 'Không xác định'
         print(f"🔴 LỖI ĐĂNG NHẬP: Status Code {status_code} - Vui lòng kiểm tra tài khoản và mật khẩu hoặc API URL.")
         return None
+
 
 def fetch_data(token, endpoint, params=None):
     """Gửi yêu cầu GET đến API Protected."""
@@ -79,30 +76,31 @@ def fetch_data(token, endpoint, params=None):
     try:
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
-        
+
         data = response.json()
-        
+
         if isinstance(data, list):
             return data
-        
+
         if isinstance(data, dict):
             return data.get('data', data)
-        
+
         return data
-        
+
     except requests.exceptions.RequestException as e:
         print(f"🔴 Lỗi khi gọi API {endpoint}: {e}")
-        return [] 
+        return []
+
 
 def generate_report(token):
     """
-    Thu thập dữ liệu và tạo báo cáo KTX. 
+    Thu thập dữ liệu và tạo báo cáo KTX.
     Nội dung báo cáo được định dạng tối ưu cho việc chia Chunk.
     """
     if token is None:
         print("🔴 Không thể tạo báo cáo tự động: Không có token truy cập.")
         return False
-        
+
     print("\n--- 2. BẮT ĐẦU TẠO BÁO CÁO KTX (DỮ LIỆU THỜI GIAN THỰC) ---")
     # 1. THU THẬP DỮ LIỆU
     areas = fetch_data(token, "/api/v1/protected/dorm-areas")
@@ -135,8 +133,7 @@ def generate_report(token):
         'approved': sum(1 for c in contracts if c.get('status') == 'approved'),
     }
     active_periods = [p for p in periods if 'endtime' in p and datetime.strptime(p['endtime'].split('T')[0], '%Y-%m-%d').date() >= datetime.now().date()]
-    
-    
+
     # 3. TẠO NỘI DUNG BÁO CÁO TXT (TỐI ƯU CHUNKING)
     report_content = []
 
@@ -171,15 +168,15 @@ def generate_report(token):
     report_content.append(f"Tổng số đơn nguyện vọng đã nhận: {app_stats['total']}")
     report_content.append(f"Số đơn đang chờ duyệt: {app_stats['pending']}")
     report_content.append(f"Số đơn đã được duyệt: {app_stats['approved']}")
-    report_content.append(f"Số đơn đã bị hủy/từ chối: {app_stats['rejected']}\n\n") 
-    
+    report_content.append(f"Số đơn đã bị hủy/từ chối: {app_stats['rejected']}\n\n)")
+
     # --- PHẦN IV: TÌNH TRẠNG HỢP ĐỒNG & THANH TOÁN ---
     report_content.append("IV. TÌNH TRẠNG HỢP ĐỒNG & THANH TOÁN")
     report_content.append(f"Tổng số hợp đồng đã tạo: {contract_stats['total']}")
     report_content.append(f"Số hợp đồng đã được duyệt chính thức: {contract_stats['approved']}")
     report_content.append(f"Số hợp đồng đã thanh toán: {contract_stats['paid']}")
-    report_content.append(f"Số hợp đồng chưa thanh toán: {contract_stats['unpaid']}\n\n") 
-    
+    report_content.append(f"Số hợp đồng chưa thanh toán: {contract_stats['unpaid']}\n\n")
+
     # --- PHẦN V: CHI TIẾT CÁC ĐỢT ĐĂNG KÝ ---
     report_content.append("V. CHI TIẾT CÁC ĐỢT ĐĂNG KÝ")
     if periods:
@@ -210,7 +207,7 @@ def generate_report(token):
             report_content.append(f"Ngày: {date_str} | Khu KTX: {area_id} | Cán bộ: {staff_name}")
     else:
         report_content.append("Hiện không có lịch trực nào được lên kế hoạch.")
-    report_content.append("-" * 50) 
+    report_content.append("-" * 50)
 
     # 4. LƯU VÀO FILE
     os.makedirs(os.path.dirname(REPORT_FILE), exist_ok=True)
@@ -218,11 +215,12 @@ def generate_report(token):
         final_content = '\n'.join(report_content)
         # Sử dụng replace để đảm bảo ngắt đoạn mạnh mẽ hơn cho việc chia chunk (\n\n)
         f.write(final_content.replace('\n\n\n', '\n\n'))
-    
-    print(f"\n✅ BÁO CÁO ĐÃ ĐƯỢC TẠO THÀNH CÔNG!")
+
+    print("\n✅ BÁO CÁO ĐÃ ĐƯỢC TẠO THÀNH CÔNG!")
     print(f"File báo cáo nằm tại: {os.path.abspath(REPORT_FILE)}")
-    return True # Trả về True nếu báo cáo được tạo thành công
-    
+    return True  # Trả về True nếu báo cáo được tạo thành công
+
+
 def load_text_file_robustly(file_path):
     """
     Hàm riêng để tải file .txt một cách mạnh mẽ, thử nhiều mã hóa khác nhau
@@ -231,13 +229,14 @@ def load_text_file_robustly(file_path):
         # 1. Thử tải bằng tự động dò mã hóa (autodetect)
         loader = TextLoader(file_path, autodetect_encoding=True)
         return loader.load()
-    except Exception as e:
+    except Exception:
         # 2. Nếu thất bại, thử buộc mã hóa UTF-8
         try:
             loader = TextLoader(file_path, encoding='utf-8')
             return loader.load()
         except Exception as e_utf8:
             raise Exception(f"Không thể tải file TXT ngay cả với UTF-8. ỗi gốc: {e_utf8}")
+
 
 def setup_database():
     """
@@ -247,22 +246,22 @@ def setup_database():
     3. Chia nhỏ thành chunks.
     4. Tạo embeddings và lưu vào ChromaDB.
     """
-    
+
     # 1. TỰ ĐỘNG TẠO BÁO CÁO MỚI NHẤT
     token = get_access_token()
     if token:
         generate_report(token)
     else:
         print("\n[Bỏ qua bước tạo báo cáo tự động]: Đăng nhập không thành công hoặc không có token.")
-    print("\n--- BƯỚC 1: XỬ LÝ DỮ LIỆU ĐẦU VÀ TẠO DATABASE ---") 
+    print("\n--- BƯỚC 1: XỬ LÝ DỮ LIỆU ĐẦU VÀ TẠO DATABASE ---")
     documents = []
     if not os.path.exists(DATA_FOLDER):
-        print(f"❌ Lỗi: Thư mục '{DATA_FOLDER}' không tồn tại.")
+        print("❌ Lỗi: Thư mục '{DATA_FOLDER}' không tồn tại.")
         return None
-    
+
     # 2. Tải tài liệu từ thư mục và xử lý lỗi
-    print(f"Xử lý file txt")
-    txt_file_paths = glob.glob(os.path.join(DATA_FOLDER, f"**/*.txt"), recursive=True)
+    print("Xử lý file txt")
+    txt_file_paths = glob.glob(os.path.join(DATA_FOLDER, "**/*.txt"), recursive=True)
     if not txt_file_paths:
         print("Lỗi: Không tìm thấy bất kỳ file txt nào trong thư mục")
         return None
@@ -271,7 +270,7 @@ def setup_database():
             documents.extend(load_text_file_robustly(file_path))
         except Exception as e:
             # print(f"❌ CANH BAO: Khong the tai file '{file_path}'. Loi: {e}")
-            print (f"❌ CANH BAO: Không thể tải file '{file_path}' do lỗi: {e}")
+            print(f"❌ CANH BAO: Không thể tải file '{file_path}' do lỗi: {e}")
     if not documents:
         print("Lỗi: Không tìm thấy tài liệu nào trong thư mục. Vui lòng thêm file vào.")
         return None
@@ -281,13 +280,13 @@ def setup_database():
     # 3. Chia nhỏ tài liệu thành chunks
     print(f"-> Dang chia nho tai lieu thanh chunks (Kich thuoc: {CHUNK_SIZE}, Chong lan: {CHUNK_OVERLAP})...")
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE, 
+        chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
         separators=["\n\n", "\n", ". ", " ", ""]
     )
     chunks = text_splitter.split_documents(documents)
     print(f"✅ Da chia nho thanh {len(chunks)} doan (chunks).")
-    
+
     # 4. Tạo Embeddings và lưu vào ChromaDB
     print(f"-> Dang khoi tao mo hinh nhung: {EMBEDDING_MODEL_NAME}...")
     embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
@@ -301,7 +300,7 @@ def setup_database():
             embedding_function=embeddings
         )
         vectorstore.delete(ids=vectorstore.get()['ids'])
-        print(f"-> Đã xóa dữ liệu cũ trong collection, đang thêm dữ liệu mới...")
+        print("-> Đã xóa dữ liệu cũ trong collection, đang thêm dữ liệu mới...")
         vectorstore.add_documents(documents=chunks)
     else:
         vectorstore = Chroma.from_documents(
@@ -309,6 +308,6 @@ def setup_database():
             embedding=embeddings,
             persist_directory=VECTOR_DB_PATH
         )
-        print(f"-> Đã tạo collection mới")
+        print("-> Đã tạo collection mới")
 
     return vectorstore
