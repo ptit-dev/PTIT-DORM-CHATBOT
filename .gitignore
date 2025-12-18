@@ -8,9 +8,11 @@
 !requirements.txt
 !README.md
 !.gitignore
-!.github/workflows/*
 !data_documents/
 !data_documents/**
+!.github/
+!.github/workflows/
+!.github/workflows/*
 
 # Ignore Python cache
 __pycache__/
