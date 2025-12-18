@@ -242,7 +242,3 @@ async def websocket_endpoint(websocket: WebSocket):
         LAST_ACTIVITY.pop(client_id, None)
         async with RATE_LIMIT_LOCK:
             RATE_LIMIT_STORE.pop(client_id, None)
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
