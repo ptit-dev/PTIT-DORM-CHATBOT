@@ -16,7 +16,7 @@ import uvicorn
 # Quản lý rate limit
 RATE_LIMIT_STORE = {} 
 MAX_MESSAGES = 1
-TIME_WINDOW_SECONDS = 15
+TIME_WINDOW_SECONDS = 10
 RATE_LIMIT_LOCK = asyncio.Lock()
 
 # Quản lý connection limit
@@ -25,10 +25,9 @@ active_connections_count = 0
 CONNECTION_COUNT_LOCK = asyncio.Lock()
 
 # Quản lý idle timeout
-IDLE_TIMEOUT_SECONDS = 100
+IDLE_TIMEOUT_SECONDS = 30
 LAST_ACTIVITY = {}
 
-# Khắc phục lỗi unicode trên Win
 if sys.stdout.encoding.lower() != 'utf-8':
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -37,15 +36,16 @@ if sys.stdout.encoding.lower() != 'utf-8':
 
 app = FastAPI(title="RAG Chatbot API", version="1.0.0")
 
+origins = [
+    "http://localhost:3000",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-load_dotenv()
 
 llama_llm = None
 vectorstore = None
@@ -61,14 +61,13 @@ class AnswerResponse(BaseModel):
 # Quản lý Reload Database
 IS_RELOADING_DB = False
 RELOAD_DB_LOCK = asyncio.Lock()
+RELOAD_DB_INTERVAL = 3 * 24 * 60 * 60
 
 async def auto_reload_database():
-    """Hàm tự động reload database mỗi 60 giây"""
+    """Hàm tự động reload database mỗi 3 ngày"""
     global vectorstore, IS_RELOADING_DB, llama_llm
     
     while True:
-        await asyncio.sleep(3 * 24 * 60 * 60)  # Reload mỗi 3 ngày
-        
         async with RELOAD_DB_LOCK:
             if IS_RELOADING_DB:
                 print("⏭️  Database đang được reload, bỏ qua chu kỳ này")
@@ -76,7 +75,7 @@ async def auto_reload_database():
             IS_RELOADING_DB = True
         
         try:
-            print("\n🔄 BẮT ĐẦU RELOAD DATABASE (Chu kỳ 60s)...")
+            print("\n🔄 BẮT ĐẦU RELOAD DATABASE (Chu kỳ 3 ngày)...")
             
             # 1. Chạy setup_database để tạo database mới
             print("1. Tạo database mới với setup_database()...")
@@ -101,33 +100,34 @@ async def auto_reload_database():
             async with RELOAD_DB_LOCK:
                 IS_RELOADING_DB = False
 
-# Hàm log thông tin server định kỳ
+        await asyncio.sleep(RELOAD_DB_INTERVAL)  # Reload mỗi 3 ngày
+
 async def server_status_reporter():
-    """log thông tin server mỗi 6 giây"""
+    """log thông tin server mỗi 1 phút"""
     while True:
-        await asyncio.sleep(6)
+        await asyncio.sleep(60)
         print("\n" + "="*60)
         print(f"📊 THÔNG TIN SERVER (Kết nối: {active_connections_count}/{MAX_CONNECTIONS})")
         print(f"   • Rate Limit Store: {len(RATE_LIMIT_STORE)} clients")
         print(f"   • Last Activity: {len(LAST_ACTIVITY)} clients")
         print("="*60 + "\n")
 
-# Khởi động server
 @app.on_event("startup")
 async def startup_event():
     global llama_llm, vectorstore
     print("🚀 Khởi động API Service...")
     llama_llm, vectorstore = load_llm_and_db()
+
     if llama_llm and vectorstore:
         print("✅ LLM và Vector Database đã sẵn sàng!")
     else:
         print("🔴 Lỗi: Không thể tải LLM hoặc Database")
-    
+
     asyncio.create_task(server_status_reporter())
     asyncio.create_task(auto_reload_database())
 
-# Kiểm tra rate limit
 async def check_rate_limit(websocket: WebSocket) -> bool:
+    """Kiểm tra và áp dụng rate limit cho mỗi client."""
     client_id = id(websocket)
     current_time = time.time()
     
@@ -151,14 +151,13 @@ async def check_rate_limit(websocket: WebSocket) -> bool:
         RATE_LIMIT_STORE[client_id] = timestamps
         return True
 
-# Kiểm tra Idle Timeout
 async def check_idle_timeout(websocket: WebSocket, client_id: int):
     """Theo dõi hoạt động và ngắt kết nối nếu không có tin nhắn trong thời gian quy định."""
     global LAST_ACTIVITY
     
     while True:
-        await asyncio.sleep(5)
-        
+        await asyncio.sleep(10)
+
         if websocket.client_state != status.WS_CONNECTED:
             break
 
@@ -202,7 +201,6 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.close(code=1011)
         except Exception:
             pass
-
     try:
         while True:
             data = await websocket.receive_text()
@@ -218,7 +216,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
             answer = generate_response(llama_llm, vectorstore, data)
             await websocket.send_json({"question": data, "answer": answer.strip(), "status": "success"})
-            
     except WebSocketDisconnect:
         print(f"❌ Client {client_id} đã ngắt kết nối.")
     except Exception as e:
@@ -228,7 +225,6 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
         except Exception:
             pass
-
     finally:
         if timeout_task:
             timeout_task.cancel()
@@ -238,7 +234,6 @@ async def websocket_endpoint(websocket: WebSocket):
             print(f"Ngắt kết nối với {client_id} . Tổng kết nối còn lại: {active_connections_count}")
         
         LAST_ACTIVITY.pop(client_id, None)
-
         async with RATE_LIMIT_LOCK:
             RATE_LIMIT_STORE.pop(client_id, None)
 

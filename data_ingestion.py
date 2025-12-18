@@ -23,17 +23,20 @@ if sys.stdout.encoding.lower() != 'utf-8':
 VECTOR_DB_PATH = "rag_chroma_db"
 DATA_FOLDER = "data_documents"
 
+# MÔ HÌNH NHÚNG VĂN BẢN
 # EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-large" 
 # EMBEDDING_MODEL_NAME = "vinai/phobert-base"
 EMBEDDING_MODEL_NAME = "bkai-foundation-models/vietnamese-bi-encoder"
+
+# Cấu hình chia nhỏ tài liệu
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 100
 REPORT_FILE = "data_documents/ThongKeKTX.txt"
 
 
 # --- CẤU HÌNH API (DÙNG CHO BÁO CÁO TỰ ĐỘNG) ---
+load_dotenv() 
 API_BASE_URL = os.getenv("API_BASE_URL")
-# Thông tin đăng nhập Admin từ biến môi trường
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME_ENV")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD_ENV")
 
@@ -97,11 +100,10 @@ def generate_report(token):
     Nội dung báo cáo được định dạng tối ưu cho việc chia Chunk.
     """
     if token is None:
-        print("🔴 Khong the tao bao cao tu dong: Khong co token truy cap.")
+        print("🔴 Không thể tạo báo cáo tự động: Không có token truy cập.")
         return False
         
     print("\n--- 2. BẮT ĐẦU TẠO BÁO CÁO KTX (DỮ LIỆU THỜI GIAN THỰC) ---")
-    
     # 1. THU THẬP DỮ LIỆU
     areas = fetch_data(token, "/api/v1/protected/dorm-areas")
     managers = fetch_data(token, "/api/v1/protected/managers")
@@ -132,18 +134,23 @@ def generate_report(token):
         'unpaid': sum(1 for c in contracts if c.get('status_payment') == 'unpaid'),
         'approved': sum(1 for c in contracts if c.get('status') == 'approved'),
     }
-    
     active_periods = [p for p in periods if 'endtime' in p and datetime.strptime(p['endtime'].split('T')[0], '%Y-%m-%d').date() >= datetime.now().date()]
     
     
     # 3. TẠO NỘI DUNG BÁO CÁO TXT (TỐI ƯU CHUNKING)
     report_content = []
-    
+
     # --- PHẦN I: THÔNG TIN TỔNG QUAN HỆ THỐNG ---
     report_content.append("I. THÔNG TIN TỔNG QUAN HỆ THỐNG")
     report_content.append(f"Tổng số khu KTX đang quản lý: {len(areas)}")
     report_content.append(f"Danh sách khu KTX: {', '.join([area.get('name', 'N/A') for area in areas])}")
-    report_content.append(f"Tổng số cán bộ quản túc: {len(managers)}")
+    for area in areas:
+        report_content.append(f" - KTX {area.get('name', 'N/A')}")
+        report_content.append(f"   Địa chỉ: {area.get('address', 'N/A')}")
+        report_content.append(f"   Cơ sở: {area.get('branch', 'N/A')}")
+        report_content.append(f"   Mô tả: {area.get('description', 'N/A')}")
+        report_content.append(f"   Phí/giá ở/giá thuê/giá hàng tháng/tiền phòng: {area.get('fee', 'N/A')} VND / tháng")
+        report_content.append(f"   Trạng thái: {"Đang hoạt động" if area.get('status', 'N/A') == 'active' else "Ngừng hoạt động"}")
     report_content.append(f"Số đợt đăng ký đang/sắp diễn ra: {len(active_periods)}\n\n")
     report_content.append(f"Gồm các đợt đăng ký: {', '.join([p.get('name', 'N/A') for p in active_periods])}")
     report_content.append("\n")
@@ -154,19 +161,17 @@ def generate_report(token):
         for manager in managers:
             name = manager.get('fullname', 'N/A')
             report_content.append(f"Cán bộ: {name} | Địa điểm: KTX {manager.get('area_id', 'N/A')}")
-        report_content.append("\n") 
+        report_content.append(f"Tổng số cán bộ quản túc: {len(managers)}")
     else:
         report_content.append("Hiện không có danh sách cán bộ quản túc.")
-        report_content.append("\n")
+    report_content.append("\n")
 
-
-    # --- PHẦN III: TÌNH TRẠẠNG ĐƠN NGUYỆN VỌNG ---
+    # --- PHẦN III: TÌNH TRẠNG ĐƠN NGUYỆN VỌNG ---
     report_content.append("III. TÌNH TRẠNG ĐƠN NGUYỆN VỌNG")
     report_content.append(f"Tổng số đơn nguyện vọng đã nhận: {app_stats['total']}")
     report_content.append(f"Số đơn đang chờ duyệt: {app_stats['pending']}")
     report_content.append(f"Số đơn đã được duyệt: {app_stats['approved']}")
     report_content.append(f"Số đơn đã bị hủy/từ chối: {app_stats['rejected']}\n\n") 
-    
     
     # --- PHẦN IV: TÌNH TRẠNG HỢP ĐỒNG & THANH TOÁN ---
     report_content.append("IV. TÌNH TRẠNG HỢP ĐỒNG & THANH TOÁN")
@@ -174,7 +179,6 @@ def generate_report(token):
     report_content.append(f"Số hợp đồng đã được duyệt chính thức: {contract_stats['approved']}")
     report_content.append(f"Số hợp đồng đã thanh toán: {contract_stats['paid']}")
     report_content.append(f"Số hợp đồng chưa thanh toán: {contract_stats['unpaid']}\n\n") 
-    
     
     # --- PHẦN V: CHI TIẾT CÁC ĐỢT ĐĂNG KÝ ---
     report_content.append("V. CHI TIẾT CÁC ĐỢT ĐĂNG KÝ")
@@ -195,7 +199,6 @@ def generate_report(token):
         report_content.append("Hiện không có đợt đăng ký nào.")
         report_content.append("\n")
 
-
     # --- PHẦN VI: LỊCH TRỰC CÁN BỘ QUẢN TÚC ---
     report_content.append("VI. LỊCH TRỰC CÁN BỘ QUẢN TÚC")
     if duty_schedules:
@@ -207,7 +210,6 @@ def generate_report(token):
             report_content.append(f"Ngày: {date_str} | Khu KTX: {area_id} | Cán bộ: {staff_name}")
     else:
         report_content.append("Hiện không có lịch trực nào được lên kế hoạch.")
-    
     report_content.append("-" * 50) 
 
     # 4. LƯU VÀO FILE
@@ -237,7 +239,6 @@ def load_text_file_robustly(file_path):
         except Exception as e_utf8:
             raise Exception(f"Không thể tải file TXT ngay cả với UTF-8. ỗi gốc: {e_utf8}")
 
-# ---------------------- TẠO VÀ LƯU DATABASE -------------------------------
 def setup_database():
     """
     Thực hiện 4 bước:
@@ -253,30 +254,24 @@ def setup_database():
         generate_report(token)
     else:
         print("\n[Bỏ qua bước tạo báo cáo tự động]: Đăng nhập không thành công hoặc không có token.")
-
-
     print("\n--- BƯỚC 1: XỬ LÝ DỮ LIỆU ĐẦU VÀ TẠO DATABASE ---") 
-    
     documents = []
     if not os.path.exists(DATA_FOLDER):
         print(f"❌ Lỗi: Thư mục '{DATA_FOLDER}' không tồn tại.")
         return None
-
+    
     # 2. Tải tài liệu từ thư mục và xử lý lỗi
     print(f"Xử lý file txt")
     txt_file_paths = glob.glob(os.path.join(DATA_FOLDER, f"**/*.txt"), recursive=True)
-    
     if not txt_file_paths:
         print("Lỗi: Không tìm thấy bất kỳ file txt nào trong thư mục")
         return None
-
     for file_path in txt_file_paths:
         try:
             documents.extend(load_text_file_robustly(file_path))
         except Exception as e:
             # print(f"❌ CANH BAO: Khong the tai file '{file_path}'. Loi: {e}")
             print (f"❌ CANH BAO: Không thể tải file '{file_path}' do lỗi: {e}")
-
     if not documents:
         print("Lỗi: Không tìm thấy tài liệu nào trong thư mục. Vui lòng thêm file vào.")
         return None
@@ -296,64 +291,24 @@ def setup_database():
     # 4. Tạo Embeddings và lưu vào ChromaDB
     print(f"-> Dang khoi tao mo hinh nhung: {EMBEDDING_MODEL_NAME}...")
     embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
-
-    # Xóa database cũ (nếu có) để tạo database mới
+    """
+    Kiểm tra nếu db đã tồn tại thì xóa dữ liệu cũ trước khi thêm mới
+    Nếu không thì tạo mới
+    """
     if os.path.exists(VECTOR_DB_PATH):
-        # xóa dữ liệu trong db đó đi
-        collection = Chroma(persist_directory=VECTOR_DB_PATH, embedding_function=embeddings)
-        collection.delete_collection()
-    print(f"-> Dang tao va luu Vector Database vao {VECTOR_DB_PATH}...")
-    vectorstore = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        persist_directory=VECTOR_DB_PATH
-    )
-    print(f"✅ Database da duoc tao va luu thanh cong!")
-    return vectorstore
-
-
-def test_retrieval(vectorstore):
-    """
-    Thực hiện một truy vấn tìm kiếm đơn giản để kiểm tra tính năng Retrieval.
-    """
-    print("\n--- BUOC 2: KIEM TRA TINH NANG TRUY VAN (RETRIEVAL TEST) ---")
-    
-    # Câu hỏi thử nghiệm
-    test_question = "" 
-    while test_question != "exit":
-        test_question = input("Nhap cau hoi de kiem tra (tieng Viet khong dau) hoac 'exit' de thoat: ").strip()
-        
-        if test_question.lower() == 'exit':
-            break
-
-        # 1. Thiết lập Retriever
-        # Truy xuất 5 đoạn văn bản (chunks) liên quan nhất
-        retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
-        
-        # 2. Thực hiện truy vấn
-        retrieved_docs = retriever.invoke(test_question)
-        
-        print(f"\n[QUERY] Cau hoi: {test_question}")
-        print(f"✅ Da truy xuat thanh cong {len(retrieved_docs)} doan van ban lien quan nhat.")
-        
-        print("\n--- NOI DUNG 5 DOAN VAN BAN TRUY VAN DUOC ---")
-        for i, doc in enumerate(retrieved_docs):
-            # Trích xuất nội dung ngắn và nguồn
-            content_snippet = doc.page_content.replace('\n', ' ')
-            source = doc.metadata.get('source', 'nguon khong xac dinh')
-            print(f"[{i+1}] Nguon: {source}")
-            print(f"     Noi dung: {content_snippet}")
-        print("----------------------------------------------------------")
-
-
-if __name__ == "__main__":
-    load_dotenv() 
-    vectorstore = setup_database()
-
-    if vectorstore:
-        print("\n------------------------------------------------------------")
-        print("TẠO BÁO CÁO VÀ DATABASE THÀNH CÔNG")
-        print("------------------------------------------------------------")
-        test_retrieval(vectorstore)
+        vectorstore = Chroma(
+            persist_directory=VECTOR_DB_PATH,
+            embedding_function=embeddings
+        )
+        vectorstore.delete(ids=vectorstore.get()['ids'])
+        print(f"-> Đã xóa dữ liệu cũ trong collection, đang thêm dữ liệu mới...")
+        vectorstore.add_documents(documents=chunks)
     else:
-        print("\n🔴 Lỗi xảy ra trong quá trình tạo Vector Database")
+        vectorstore = Chroma.from_documents(
+            documents=chunks,
+            embedding=embeddings,
+            persist_directory=VECTOR_DB_PATH
+        )
+        print(f"-> Đã tạo collection mới")
+
+    return vectorstore

@@ -8,6 +8,9 @@
 !requirements.txt
 !README.md
 !.gitignore
+!.github/workflows/*
+!data_documents/
+!data_documents/**
 
 # Ignore Python cache
 __pycache__/
@@ -19,7 +22,6 @@ __pycache__/
 .env
 
 # Ignore data folders
-data_documents/
 data_documents_test/
 rag_chroma_db/
 
