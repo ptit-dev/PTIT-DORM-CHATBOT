@@ -13,6 +13,8 @@
 !.github/
 !.github/workflows/
 !.github/workflows/*
+!Dockerfile
+!.dockerignore
 
 # Ignore Python cache
 __pycache__/
