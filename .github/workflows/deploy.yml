@@ -1,20 +1,31 @@
-name: Deploy PTIT Dorm Chatbot to Azure
-
+name: CI-CD Ptit Chatbot (GitHub to Azure via DockerHub)
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Deploy to Azure Web App
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot:latest .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot:latest
+
+      - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ptit-dorm-chatbot
+          app-name: 'ptit-dorm-chatbot'
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: .
-          clean: true
+          images: 'docker.io/${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot:latest'
