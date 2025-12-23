@@ -20,7 +20,7 @@ jobs:
 
       - name: Build and Push Image
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot:latest .
+          docker build --platform linux/amd64 -t ${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot:latest .
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot:latest
 
       - name: 'Deploy to Azure Web App'
