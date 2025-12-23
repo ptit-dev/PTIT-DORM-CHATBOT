@@ -28,4 +28,4 @@ jobs:
         with:
           app-name: 'ptit-dorm-chatbot-1'
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          images: 'docker.io/${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot:latest'
+          images: 'index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot:latest'
