@@ -101,9 +101,9 @@ async def auto_reload_database():
 
 
 async def server_status_reporter():
-    """log thông tin server mỗi 1 phút"""
+    """log thông tin server mỗi 10 phút"""
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(60*10)
         print("\n" + "="*60)
         print(f"📊 THÔNG TIN SERVER (Kết nối: {active_connections_count}/{MAX_CONNECTIONS})")
         print(f"   • Rate Limit Store: {len(RATE_LIMIT_STORE)} clients")
