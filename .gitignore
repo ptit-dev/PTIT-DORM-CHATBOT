@@ -2,6 +2,7 @@
 *
 
 # Except these files
+!main.py
 !rag_logic.py
 !data_ingestion.py
 !api_service.py
@@ -10,6 +11,10 @@
 !.gitignore
 !data_documents/
 !data_documents/**
+!services/
+!services/**
+!middleware/
+!middleware/**
 !.github/
 !.github/workflows/
 !.github/workflows/*

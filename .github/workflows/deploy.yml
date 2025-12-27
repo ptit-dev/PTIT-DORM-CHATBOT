@@ -1,8 +1,8 @@
-name: CI-CD Ptit Chatbot (GitHub to Azure via DockerHub)
+name: CI-CD Ptit Chatbot (Tag-Only Mode)
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*'
 
 jobs:
   build-and-deploy:
@@ -12,6 +12,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Get tag name
+        id: vars
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -20,12 +24,15 @@ jobs:
 
       - name: Build and Push Image
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot:latest .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot:latest
+          REPO=${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot
+          USER_TAG=${{ steps.vars.outputs.tag }}
+          
+          docker build -t $REPO:$USER_TAG .
+          docker push $REPO:$USER_TAG
 
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'ptit-dorm-chatbot'
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          images: 'docker.io/${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot:latest'
+          images: 'docker.io/${{ secrets.DOCKERHUB_USERNAME }}/ptit-chatbot:${{ steps.vars.outputs.tag }}'

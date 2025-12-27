@@ -44,14 +44,14 @@ API_BASE_URL=***
 
 **Khởi động API Server:**
 ```bash
-uvicorn api_service:app
+uvicorn main:app
 ```
 
 Server sẽ chạy tại: `http://127.0.0.1:8000`
 
 ## 🛠️ CẤU HÌNH QUAN TRỌNG
 
-Các tham số có thể chỉnh sửa trong các file `api_service.py`, `data_ingestion.py` và `rag_logic.py`.
+Các tham số có thể chỉnh sửa trong `main.py` và các file trong thư mục `services/` và `middleware/`.
 
 ### API (FastAPI)
 
@@ -101,17 +101,27 @@ async def test_chatbot():
 asyncio.run(test_chatbot())
 ```
 
-## 📁 CẤU TRÚC CƠ BẢN
+## 📁 CẤU TRÚC DỰ ÁN
 
 ```
 PTIT-DORM-CHATBOT/
-├── api_service.py      # Server (FastAPI WebSocket)
-├── rag_logic.py        # Logic RAG (Gemini + Retrieval)
-├── data_ingestion.py   # Xử lý dữ liệu & tạo Vector DB
+├── main.py                 # Entry point (FastAPI WebSocket)
+├── api_service.py          # Backward compatibility wrapper
+├── rag_logic.py            # Backward compatibility wrapper
+├── data_ingestion.py       # Backward compatibility wrapper
+├── services/               # Core services
+│   ├── __init__.py
+│   ├── rag_service.py      # RAG logic (Gemini + Retrieval)
+│   └── database_service.py # Data processing & Vector DB
+├── middleware/             # Middleware components
+│   ├── __init__.py
+│   ├── rate_limiter.py     # Rate limiting
+│   ├── connection_manager.py # Connection management
+│   └── cors_config.py      # CORS configuration
 ├── requirements.txt
-├── .env                # Biến môi trường
-├── data_documents/     # Dữ liệu nguồn (.txt)
-└── rag_chroma_db/      # Vector database (ChromaDB)
+├── .env                    # Environment variables
+├── data_documents/         # Source data (.txt)
+└── rag_chroma_db/          # Vector database (ChromaDB)
 ```
 
 ## 🛡️ BẢO MẬT & GHI CHÚ
