@@ -11,6 +11,7 @@ from langchain_google_genai import GoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.language_models.llms import LLM
 from google.genai.errors import APIError as GoogleAPIError
+from services.config_service import config_service
 
 if sys.stdout.encoding.lower() != 'utf-8':
     try:
@@ -22,16 +23,16 @@ if sys.stdout.encoding.lower() != 'utf-8':
 class RAGService:
     
     VECTOR_DB_PATH = "rag_chroma_db"
-    LLM_MODEL_ID = "gemma-3-27b-it"
     EMBEDDING_MODEL_NAME = "bkai-foundation-models/vietnamese-bi-encoder"
-    API_TIMEOUT_SECONDS = 60
-    RETRIEVAL_K_CHUNKS = 5
+    API_TIMEOUT_SECONDS = int(os.getenv("RAG_API_TIMEOUT_SECONDS", 30))
+    RETRIEVAL_K_CHUNKS = int(os.getenv("RAG_RETRIEVAL_K_CHUNKS", 5))
     
     def __init__(self):
         load_dotenv()
-        os.environ['GOOGLE_API_KEY'] = os.getenv('GOOGLE_API_KEY', '')
+        os.environ['GOOGLE_API_KEY'] = os.getenv('GOOGLE_API_KEY')
         self.llm: Optional[LLM] = None
         self.vectorstore: Optional[Chroma] = None
+        self.config = config_service
     
     def load_llm_and_db(self) -> Tuple[Optional[LLM], Optional[Chroma]]:
         print("RAG: Initializing LLM")
@@ -41,11 +42,11 @@ class RAGService:
                 return None, None
             
             self.llm = GoogleGenerativeAI(
-                model=self.LLM_MODEL_ID,
-                temperature=0.23,
+                model=self.config.llm_model_name,
+                temperature=self.config.temperature,
                 max_output_tokens=10000,
             )
-            print(f"RAG: LLM {self.LLM_MODEL_ID} ready")
+            print(f"RAG: LLM {self.config.llm_model_name} ready")
         except GoogleAPIError as e:
             print(f"RAG: LLM API error - {e}")
             return None, None
@@ -77,13 +78,7 @@ class RAGService:
         context_text = "\n\n".join([" ".join(doc.page_content.split()) for doc in retrieved_docs])
 
         template = (
-            "Bạn là **Chatbot Hỗ trợ Thông tin Ký túc xá PTIT**. Nhiệm vụ của bạn là cung cấp câu trả lời **trực tiếp, ngắn gọn và hữu ích** cho sinh viên.\n\n"
-            "QUY TẮc BẮT BUỘC:\n"
-            "1. **Chỉ trả lời** dựa trên thông tin có trong phần 'NGỮ CẢNH'. KHÔNG tự suy luận, bịa đặt hay thêm thông tin ngoài ngữ cảnh.\n"
-            "2. **Giọng điệu:** Thân thiện, dễ thương, đầy đủ xưng hô, chuyên nghiệp và rõ ràng.\n"
-            "3. **Cấu trúc trả lời:** Đi thẳng vào câu hỏi, tránh dùng các cụm từ mở đầu như 'Theo ngữ cảnh...', 'Dưới đây là thông tin tôi tìm thấy...'.\n"
-            "4. **Xử lý thiếu thông tin:** Nếu 'NGỮ CẢNH' KHÔNG CÓ thông tin để trả lời, Trả lời theo ý: 'Xin lỗi, Mình đã kiểm tra nhưng chưa thấy thông tin về nội dung này. Bạn vui lòng liên hệ Ban Quản lý KTX để được hỗ trợ thêm nhé.'"
-            "5. Trả lời đầy đủ thông tin có trong ngữ cảnh, không được tự ý tóm tắt hoặc cắt ngắn nội dung.\n\n"
+            "{system_prompt}"
             "NGỮ CẢNH:\n"
             "--- Bối cảnh dữ liệu hiện tại (Ngày {current_date}) ---\n"
             "{context}\n"
@@ -95,14 +90,15 @@ class RAGService:
 
         rag_prompt = PromptTemplate(
             template=template,
-            input_variables=["context", "question", "current_date"]
+            input_variables=["context", "question", "current_date", "system_prompt"]
         )
 
         current_date = datetime.now().strftime("%d/%m/%Y")
         final_prompt = rag_prompt.format(
             context=context_text,
             question=question,
-            current_date=current_date
+            current_date=current_date,
+            system_prompt=self.config.system_prompt
         )
 
         print("RAG: Calling LLM API")

@@ -7,6 +7,7 @@ from middleware.connection_manager import ConnectionManager
 from middleware.cors_config import setup_cors
 from middleware.chat_handler import ChatHandler
 from middleware.app_lifecycle import AppLifecycle
+from routers import AdminRouter
 
 app = FastAPI(title="RAG Chatbot API", version="1.0.0")
 setup_cors(app)
@@ -18,6 +19,9 @@ connection_manager = ConnectionManager(max_connections=100, idle_timeout_seconds
 
 chat_handler = ChatHandler(rag_service, rate_limiter, connection_manager)
 lifecycle = AppLifecycle(rag_service, db_service, connection_manager)
+
+admin_router = AdminRouter(lifecycle, rag_service)
+app.include_router(admin_router.router)
 
 
 @app.on_event("startup")

@@ -13,6 +13,8 @@
 !data_documents/**
 !services/
 !services/**
+!routers/
+!routers/**
 !middleware/
 !middleware/**
 !.github/

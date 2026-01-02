@@ -2,12 +2,10 @@ import asyncio
 from services.rag_service import RAGService
 from services.database_service import DatabaseService
 from middleware.connection_manager import ConnectionManager
+from services.config_service import config_service
 
 
 class AppLifecycle:
-    
-    RELOAD_INTERVAL = 3 * 24 * 60 * 60
-    STATUS_INTERVAL = 60 * 10
     
     def __init__(
         self, 
@@ -20,6 +18,7 @@ class AppLifecycle:
         self.conn_manager = connection_manager
         self._is_reloading = False
         self._reload_lock = asyncio.Lock()
+        self.config = config_service
     
     async def startup(self):
         print("Server: Starting")
@@ -36,12 +35,12 @@ class AppLifecycle:
     
     async def status_reporter(self):
         while True:
-            await asyncio.sleep(self.STATUS_INTERVAL)
+            await asyncio.sleep(self.config.status_interval)
             print(f"Status: Connections = {self.conn_manager.active_connections}")
     
     async def auto_reload(self):
         while True:
-            await asyncio.sleep(self.RELOAD_INTERVAL)
+            await asyncio.sleep(self.config.reload_interval)
             
             async with self._reload_lock:
                 if self._is_reloading:
@@ -58,3 +57,46 @@ class AppLifecycle:
             finally:
                 async with self._reload_lock:
                     self._is_reloading = False
+
+    async def reload_dorm_stats(self):
+        async with self._reload_lock:
+            if self._is_reloading:
+                return {"status": "error", "message": "Reload is already in progress"}
+            self._is_reloading = True
+
+        try:
+            print("Server: Reloading dorm stats")
+            token = await asyncio.to_thread(self.db.get_access_token)
+            if token:
+                await asyncio.to_thread(self.db.generate_report, token)
+                await asyncio.to_thread(self.db.setup_database)
+                self.rag.load_llm_and_db()
+                print("Server: dorm stats reload done")
+                return {"status": "success", "message": "dorm statistics reloaded successfully"}
+            else:
+                return {"status": "error", "message": "Cannot get access token"}
+        except Exception as e:
+            print(f"Server: dorm stats reload error - {e}")
+            return {"status": "error", "message": str(e)}
+        finally:
+            async with self._reload_lock:
+                self._is_reloading = False
+
+    async def reload_database(self):
+        async with self._reload_lock:
+            if self._is_reloading:
+                return {"status": "error", "message": "Reload is already in progress"}
+            self._is_reloading = True
+
+        try:
+            print("Server: Reloading database")
+            await asyncio.to_thread(self.db.setup_database)
+            self.rag.load_llm_and_db()
+            print("Server: Database reload done")
+            return {"status": "success", "message": "Database reloaded successfully"}
+        except Exception as e:
+            print(f"Server: Database reload error - {e}")
+            return {"status": "error", "message": str(e)}
+        finally:
+            async with self._reload_lock:
+                self._is_reloading = False
