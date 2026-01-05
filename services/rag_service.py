@@ -1,80 +1,62 @@
 import os
-import sys
-import traceback
+import threading
 from typing import Optional, Tuple
-from datetime import datetime
-
-from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_google_genai import GoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.language_models.llms import LLM
-from google.genai.errors import APIError as GoogleAPIError
-from services.config_service import config_service
-
-if sys.stdout.encoding.lower() != 'utf-8':
-    try:
-        sys.stdout.reconfigure(encoding='utf-8')
-    except AttributeError:
-        pass
+from dependency_injector.wiring import inject, Provide
+from datetime import datetime
 
 
 class RAGService:
     
-    VECTOR_DB_PATH = "rag_chroma_db"
-    EMBEDDING_MODEL_NAME = "bkai-foundation-models/vietnamese-bi-encoder"
-    API_TIMEOUT_SECONDS = int(os.getenv("RAG_API_TIMEOUT_SECONDS", 30))
-    RETRIEVAL_K_CHUNKS = int(os.getenv("RAG_RETRIEVAL_K_CHUNKS", 5))
-    
-    def __init__(self):
-        load_dotenv()
+    @inject
+    def __init__(self, 
+                 config = Provide["Container.config_service"],
+                 logging_service = Provide["Container.logging_service"]):
+        
         os.environ['GOOGLE_API_KEY'] = os.getenv('GOOGLE_API_KEY')
+        
+        self.config = config
+        self.logger = logging_service.get_logger(__name__)
+        
         self.llm: Optional[LLM] = None
         self.vectorstore: Optional[Chroma] = None
-        self.config = config_service
-    
+        self._lock = threading.Lock()
+
     def load_llm_and_db(self) -> Tuple[Optional[LLM], Optional[Chroma]]:
-        print("RAG: Initializing LLM")
-        try:
-            if not os.getenv('GOOGLE_API_KEY'):
-                print("RAG: GOOGLE_API_KEY not set")
-                return None, None
+        with self._lock:
+            if self.llm and self.vectorstore:
+                self.logger.info("RAG: LLM and DB already initialized")
+                return self.llm, self.vectorstore
             
-            self.llm = GoogleGenerativeAI(
-                model=self.config.llm_model_name,
-                temperature=self.config.temperature,
-                max_output_tokens=10000,
-            )
-            print(f"RAG: LLM {self.config.llm_model_name} ready")
-        except GoogleAPIError as e:
-            print(f"RAG: LLM API error - {e}")
-            return None, None
-        except Exception as e:
-            print(f"RAG: LLM init error - {e}")
-            return None, None
+            self.logger.info("RAG: Initializing LLM and DB")
+            try:
+                self.llm = GoogleGenerativeAI(
+                    model=self.config.llm_model_name,
+                    temperature=self.config.temperature,
+                    max_output_tokens=self.config.max_response_tokens,
+                )
+                
+                embeddings = HuggingFaceEmbeddings(model_name=self.config.embedding_model_name)
+                self.vectorstore = Chroma(
+                    persist_directory=self.config.vector_db_path,
+                    embedding_function=embeddings
+                )
+                self.logger.info("RAG: LLM and Vector DB are ready")
+                return self.llm, self.vectorstore
+            except Exception as e:
+                self.logger.error(f"RAG: Initialization error - {e}")
+                return None, None
 
-        print("RAG: Loading vector database")
-        if not os.path.exists(self.VECTOR_DB_PATH):
-            print(f"RAG: Database path '{self.VECTOR_DB_PATH}' not found")
-            return self.llm, None
-        
-        embeddings = HuggingFaceEmbeddings(model_name=self.EMBEDDING_MODEL_NAME)
-        self.vectorstore = Chroma(
-            persist_directory=self.VECTOR_DB_PATH,
-            embedding_function=embeddings
-        )
-        print("RAG: Vector database loaded")
-
-        return self.llm, self.vectorstore
-    
     def generate_response(self, question: str) -> str:
         if not self.llm or not self.vectorstore:
             return "Lỗi: Hệ thống đang bảo trì, vui lòng thử lại sau."
         
-        retriever = self.vectorstore.as_retriever(search_kwargs={"k": self.RETRIEVAL_K_CHUNKS})
+        retriever = self.vectorstore.as_retriever(search_kwargs={"k": self.config.retrieval_k_chunks})
         retrieved_docs = retriever.invoke(question)
-
         context_text = "\n\n".join([" ".join(doc.page_content.split()) for doc in retrieved_docs])
 
         template = (
@@ -90,44 +72,19 @@ class RAGService:
 
         rag_prompt = PromptTemplate(
             template=template,
-            input_variables=["context", "question", "current_date", "system_prompt"]
+            input_variables=["context", "question", "system_prompt"]
         )
 
-        current_date = datetime.now().strftime("%d/%m/%Y")
         final_prompt = rag_prompt.format(
             context=context_text,
-            question=question,
-            current_date=current_date,
-            system_prompt=self.config.system_prompt
+            current_date=datetime.now().strftime("%d/%m/%Y"),
+            system_prompt=self.config.system_prompt,
+            question=question
         )
-
-        print("RAG: Calling LLM API")
 
         try:
             response = self.llm.invoke(final_prompt)
-            print("RAG: API call successful")
-
-            if not response or response.strip() == "":
-                return (
-                    "Xin lỗi, hệ thống không thể tạo ra câu trả lời "
-                    "hợp lệ dựa trên ngữ cảnh được cung cấp. "
-                    "Vui lòng thử lại hoặc thay đổi câu hỏi."
-                )
-
-            return response
+            return response if response else "Không có phản hồi từ AI."
         except Exception as e:
-            traceback.print_exc()
-            raise Exception(f"LLM API error: {str(e)}")
-
-
-rag_service = RAGService()
-
-
-def load_llm_and_db():
-    return rag_service.load_llm_and_db()
-
-
-def generate_response(llm: LLM, vectorstore: Chroma, question: str) -> str:
-    rag_service.llm = llm
-    rag_service.vectorstore = vectorstore
-    return rag_service.generate_response(question)
+            self.logger.error(f"LLM API error: {e}")
+            return "Lỗi kết nối AI."

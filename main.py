@@ -1,34 +1,32 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI
+from common.container import Container
+from middleware.cors import setup_cors
 
-from services.rag_service import RAGService
-from services.database_service import DatabaseService
-from middleware.rate_limiter import RateLimiter
-from middleware.connection_manager import ConnectionManager
-from middleware.cors_config import setup_cors
-from middleware.chat_handler import ChatHandler
-from middleware.app_lifecycle import AppLifecycle
-from routers import AdminRouter
+container = Container()
+container.wire()
 
-app = FastAPI(title="RAG Chatbot API", version="1.0.0")
+app_lifecycle = container.app_lifecycle()
+http_router_handler = container.http_router()
+websocket_router_handler = container.websocket_router()
+logging_service = container.logging_service()
+logger = logging_service.get_logger(__name__)
+
+app = FastAPI(title="PTIT Dorm Chatbot API", version="1.0.0")
 setup_cors(app)
 
-rag_service = RAGService()
-db_service = DatabaseService()
-rate_limiter = RateLimiter(max_messages=1, time_window_seconds=10)
-connection_manager = ConnectionManager(max_connections=100, idle_timeout_seconds=30)
-
-chat_handler = ChatHandler(rag_service, rate_limiter, connection_manager)
-lifecycle = AppLifecycle(rag_service, db_service, connection_manager)
-
-admin_router = AdminRouter(lifecycle, rag_service)
-app.include_router(admin_router.router)
+app.include_router(http_router_handler.router)
+app.include_router(websocket_router_handler.router)
 
 
 @app.on_event("startup")
 async def startup():
-    await lifecycle.startup()
+    logger.info("Application starting...")
+    await app_lifecycle.startup()
+    logger.info("✓ Application ready")
 
 
-@app.websocket("/ws/chat")
-async def websocket_chat(websocket: WebSocket):
-    await chat_handler.handle_connection(websocket)
+@app.on_event("shutdown")
+async def shutdown():
+    logger.info("Application shutting down...")
+    await app_lifecycle.shutdown()
+    logger.info("✓ Application stopped")

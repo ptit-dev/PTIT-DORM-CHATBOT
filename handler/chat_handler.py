@@ -1,29 +1,28 @@
 import asyncio
 from fastapi import WebSocket, WebSocketDisconnect, status
-
-from services.rag_service import RAGService
-from middleware.rate_limiter import RateLimiter
-from middleware.connection_manager import ConnectionManager
-
+from dependency_injector.wiring import inject, Provide
 
 class ChatHandler:
     
+    @inject
     def __init__(
         self, 
-        rag_service: RAGService,
-        rate_limiter: RateLimiter,
-        connection_manager: ConnectionManager
+        rag_service = Provide["Container.rag_service"],
+        logging_service = Provide["Container.logging_service"],
+        rate_limiter = Provide["Container.rate_limiter"],
+        connection_manager = Provide["Container.connection_manager"]
     ):
         self.rag = rag_service
         self.rate_limiter = rate_limiter
         self.conn_manager = connection_manager
+        self.logger = logging_service.get_logger(__name__)
     
-    async def handle_connection(self, websocket: WebSocket):
+    async def handle_chat(self, websocket: WebSocket):
         client_id = id(websocket)
         timeout_task = None
 
         if not await self.conn_manager.add_connection():
-            print("Server: Connection rejected, limit reached")
+            self.logger.warning("Connection rejected - server capacity reached")
             try:
                 await websocket.close(
                     code=status.WS_1013_TRY_AGAIN_LATER, 
@@ -34,7 +33,7 @@ class ChatHandler:
             return
 
         await websocket.accept()
-        print(f"Server: Connected {client_id}")
+        self.logger.info(f"Chat: Connection established (ID: {client_id})")
 
         self.conn_manager.update_activity(client_id)
         timeout_task = asyncio.create_task(
@@ -55,9 +54,9 @@ class ChatHandler:
         try:
             await self._chat_loop(websocket, client_id)
         except WebSocketDisconnect:
-            print(f"Server: Disconnected {client_id}")
+            self.logger.info(f"Chat: Disconnected (ID: {client_id})")
         except Exception as e:
-            print(f"Server: Error {client_id} - {str(e)}")
+            self.logger.error(f"Chat: Error (ID: {client_id}) - {str(e)}")
             try:
                 await websocket.send_json({
                     "answer": "Lỗi máy chủ. Vui lòng thử lại.", 
@@ -83,7 +82,12 @@ class ChatHandler:
             if not await self.rate_limiter.check_rate_limit(websocket):
                 continue
 
+            self.logger.info(f"Chat: Question from {client_id}")
+
             answer = self.rag.generate_response(data)
+            
+            self.logger.info(f"Chat: Answer sent to {client_id}")
+            
             await websocket.send_json({
                 "question": data, 
                 "answer": answer.strip(), 

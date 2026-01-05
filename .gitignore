@@ -17,6 +17,10 @@
 !routers/**
 !middleware/
 !middleware/**
+!common/
+!common/**
+!handler/
+!handler/**
 !.github/
 !.github/workflows/
 !.github/workflows/*
