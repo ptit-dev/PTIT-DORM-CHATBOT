@@ -1,6 +1,5 @@
 import os
 from dotenv import load_dotenv
-from .validators import validate_system_prompt
 
 load_dotenv()
 
@@ -9,7 +8,7 @@ class Config:
     def __init__(self):
         self.api_base_url = os.getenv('API_BASE_URL', 'http://localhost:8000')
         self.backend_api_url = os.getenv('BACKEND_API_URL', '')
-        self.backend_api_key = os.getenv('BACKEND_API_KEY', '')
+        self.backend_api_key = os.getenv('BACKEND_API_KEY', 'toi-yeu-ky-tuc-xa-PTIT')
         self.llm_model_name = os.getenv('LLM_MODEL_NAME', 'gemma-3-27b-it')
         self.temperature = float(os.getenv('TEMPERATURE', '0.2'))
         self.max_context_tokens = int(os.getenv('MAX_CONTEXT_TOKENS', '4000'))
@@ -35,15 +34,3 @@ class Config:
             "4. **Xử lý thiếu thông tin:** Nếu 'NGỮ CẢNH' KHÔNG CÓ thông tin để trả lời, Trả lời theo ý: 'Xin lỗi, Mình đã kiểm tra nhưng chưa thấy thông tin về nội dung này. Bạn vui lòng liên hệ Ban Quản lý KTX để được hỗ trợ thêm nhé.'\n"
             "5. Trả lời đầy đủ thông tin có trong ngữ cảnh, không được tự ý tóm tắt hoặc cắt ngắn nội dung.\n\n"
         )
-
-        @property
-        def system_prompt(self):
-            return self._system_prompt
-        
-        @system_prompt.setter
-        def system_prompt(self, value):
-            try:
-                validate_system_prompt(value)
-                self._system_prompt = value
-            except ValueError as e:
-                raise ValueError(f"Invalid system prompt: {str(e)}")

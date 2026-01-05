@@ -100,13 +100,12 @@ class HTTPRouter:
                     detail="No guest prompt found in request data"
                 )
             
-            try:
-                self.config.system_prompt(guest_prompt.content)
-            except ValueError as e:
+            if not guest_prompt.content:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid system prompt: {str(e)}"
+                    detail="Guest prompt content is empty"
                 )
+            self.config.system_prompt = guest_prompt.content
             
             self.logger.info(f"System prompt synced: type={guest_prompt.type}, id={guest_prompt.id}")
             

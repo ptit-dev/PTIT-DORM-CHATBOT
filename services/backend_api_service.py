@@ -21,7 +21,7 @@ class BackendAPIService:
         try:
             headers = {}
             if self.api_key:
-                headers['Authorization'] = f'Bearer {self.api_key}'
+                headers['API-key'] = f'{self.api_key}'
                 
             self.logger.info(f"Fetching initial data from {self.backend_url}/api/chatbot/initialize")
             
