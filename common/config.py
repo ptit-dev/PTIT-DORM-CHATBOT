@@ -8,7 +8,7 @@ class Config:
     def __init__(self):
         self.api_base_url = os.getenv('API_BASE_URL', 'http://localhost:8000')
         self.backend_api_url = os.getenv('BACKEND_API_URL', '')
-        self.backend_api_key = os.getenv('BACKEND_API_KEY', 'toi-yeu-ky-tuc-xa-PTIT')
+        self.backend_api_key = os.getenv('BACKEND_API_KEY')
         self.llm_model_name = os.getenv('LLM_MODEL_NAME', 'gemma-3-27b-it')
         self.temperature = float(os.getenv('TEMPERATURE', '0.2'))
         self.max_context_tokens = int(os.getenv('MAX_CONTEXT_TOKENS', '4000'))

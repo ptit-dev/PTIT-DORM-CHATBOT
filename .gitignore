@@ -26,6 +26,8 @@
 !.github/workflows/*
 !Dockerfile
 !.dockerignore
+!docs/
+!docs/**
 
 # Ignore Python cache
 __pycache__/
